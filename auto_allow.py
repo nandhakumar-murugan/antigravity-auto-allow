@@ -1,9 +1,17 @@
 """
 Antigravity Auto-Allow Companion (Background Stealth Edition)
+Version: 1.2.0
+
+Features:
 - Target-Locked: ONLY triggers on Antigravity windows (never affects Chrome, browsers, or other apps)
 - Zero-Disruption: Runs quietly in background, instantly restores your mouse cursor and active browser window
 - Loud Audible Chime: Dual-tone high-alert chime on every approval so you know it worked while multitasking
+- Versioning & Metadata: Full semantic versioning display and release notes
 """
+
+__version__ = "1.2.0"
+__app_name__ = "Antigravity Auto-Allow"
+__author__ = "nandhakumar-murugan"
 
 import os
 import sys
@@ -13,7 +21,7 @@ import winsound
 import ctypes
 from ctypes import wintypes
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from PIL import ImageGrab
 import pyautogui
 import psutil
@@ -27,8 +35,8 @@ user32 = ctypes.windll.user32
 class AutoAllowApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Antigravity Auto-Allow")
-        self.root.geometry("360x300")
+        self.root.title(f"{__app_name__} v{__version__}")
+        self.root.geometry("360x305")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1e1f22")
@@ -66,12 +74,26 @@ class AutoAllowApp:
 
         title_lbl = tk.Label(
             header,
-            text="⚡ Antigravity Auto-Allow (Stealth)",
+            text="⚡ Auto-Allow",
             bg="#2b2d31",
             fg="#e0e0e0",
             font=("Segoe UI", 10, "bold")
         )
-        title_lbl.pack(side=tk.LEFT, padx=10, pady=4)
+        title_lbl.pack(side=tk.LEFT, padx=(10, 4), pady=4)
+
+        # Version Pill Badge (Clickable for info)
+        version_badge = tk.Label(
+            header,
+            text=f"v{__version__}",
+            bg="#5865f2",
+            fg="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            padx=5,
+            pady=0,
+            cursor="hand2"
+        )
+        version_badge.pack(side=tk.LEFT, padx=(2, 6), pady=6)
+        version_badge.bind("<Button-1>", lambda e: self.show_version_info())
 
         # Close and Minimize Buttons
         btn_close = tk.Button(
@@ -224,7 +246,7 @@ class AutoAllowApp:
 
         lbl_target = tk.Label(
             footer_frame,
-            text="🔒 Target Locked: Antigravity Only",
+            text=f"🔒 Antigravity Only • v{__version__}",
             bg="#1e1f22",
             fg="#57f287",
             font=("Segoe UI", 7, "bold")
@@ -240,10 +262,25 @@ class AutoAllowApp:
         )
         self.count_lbl.pack(side=tk.RIGHT)
 
+    def show_version_info(self):
+        """Displays version details and changelog dialog."""
+        info = (
+            f"⚡ {__app_name__}\n"
+            f"Version: {__version__}\n"
+            f"Author: {__author__}\n\n"
+            "Changelog:\n"
+            "• v1.2.0: Added semantic versioning UI badges & metadata\n"
+            "• v1.1.0: Antigravity target lock, stealth restore & loud chime\n"
+            "• v1.0.0: Initial auto-allow release\n\n"
+            "Repository:\n"
+            "https://github.com/nandhakumar-murugan/antigravity-auto-allow"
+        )
+        messagebox.showinfo("Version Information", info)
+
     def position_window(self):
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        win_w, win_h = 360, 300
+        win_w, win_h = 360, 305
         x = screen_w - win_w - 30
         y = screen_h - win_h - 70
         self.root.geometry(f"{win_w}x{win_h}+{x}+{y}")
