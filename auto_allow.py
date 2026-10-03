@@ -1,7 +1,8 @@
 """
-Antigravity Auto-Allow Companion
-A floating overlay tool that automatically clicks 'Allow this time'
-when Antigravity prompts for command/file permissions.
+Antigravity Auto-Allow Companion (Background Stealth Edition)
+- Target-Locked: ONLY triggers on Antigravity windows (never affects Chrome, browsers, or other apps)
+- Zero-Disruption: Runs quietly in background, instantly restores your mouse cursor and active browser window
+- Loud Audible Chime: Dual-tone high-alert chime on every approval so you know it worked while multitasking
 """
 
 import os
@@ -12,34 +13,38 @@ import winsound
 import ctypes
 from ctypes import wintypes
 import tkinter as tk
-from tkinter import ttk, messagebox
-from PIL import Image, ImageGrab
+from tkinter import ttk
+from PIL import ImageGrab
 import pyautogui
+import psutil
 
-# Disable pyautogui pause/fail-safe freeze (keep safe in corners if needed)
-pyautogui.PAUSE = 0.05
+# Configure pyautogui safety
+pyautogui.PAUSE = 0.02
 pyautogui.FAILSAFE = True
+
+user32 = ctypes.windll.user32
 
 class AutoAllowApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Antigravity Auto-Allow")
-        self.root.geometry("340x260")
+        self.root.geometry("360x300")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1e1f22")
 
-        # Windows-specific borderless / title styling
+        # Windows borderless styling
         self.root.overrideredirect(True)
 
-        # Variables
+        # State Variables
         self.is_running = False
         self.auto_thread = None
         self.hotkey_thread = None
         self.click_count = 0
         self.selected_mode = tk.StringVar(value="allow_once")  # allow_once or always_allow
         self.sound_enabled = tk.BooleanVar(value=True)
-        self.delay_var = tk.DoubleVar(value=0.4)  # seconds delay before clicking
+        self.stealth_enabled = tk.BooleanVar(value=True)  # Instantly restore mouse & active window
+        self.delay_var = tk.DoubleVar(value=0.35)
 
         # Dragging variables
         self._drag_start_x = 0
@@ -50,19 +55,18 @@ class AutoAllowApp:
         self.start_hotkey_listener()
 
     def setup_ui(self):
-        # Outer Border Frame
+        # Outer Frame
         border_frame = tk.Frame(self.root, bg="#2b2d31", bd=1, highlightbackground="#3c3f41", highlightthickness=1)
         border_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Header / Title Bar (Draggable)
+        # Header Bar (Draggable)
         header = tk.Frame(border_frame, bg="#2b2d31", height=32)
         header.pack(fill=tk.X, side=tk.TOP)
         header.pack_propagate(False)
 
-        # Title Label
         title_lbl = tk.Label(
             header,
-            text="⚡ Antigravity Auto-Allow",
+            text="⚡ Antigravity Auto-Allow (Stealth)",
             bg="#2b2d31",
             fg="#e0e0e0",
             font=("Segoe UI", 10, "bold")
@@ -98,12 +102,11 @@ class AutoAllowApp:
         )
         btn_min.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Make header draggable
         for widget in (header, title_lbl):
             widget.bind("<Button-1>", self.start_drag)
             widget.bind("<B1-Motion>", self.do_drag)
 
-        # Main Body Container
+        # Body
         body = tk.Frame(border_frame, bg="#1e1f22", padx=14, pady=10)
         body.pack(fill=tk.BOTH, expand=True)
 
@@ -123,7 +126,7 @@ class AutoAllowApp:
         )
         self.status_text.pack(side=tk.LEFT)
 
-        # Big Main Action Button
+        # Main Action Button
         self.btn_toggle = tk.Button(
             body,
             text="▶  START AUTO-ALLOW",
@@ -139,7 +142,7 @@ class AutoAllowApp:
         )
         self.btn_toggle.pack(fill=tk.X, pady=(0, 10))
 
-        # Options Row: Mode Selection
+        # Mode Selection
         mode_frame = tk.Frame(body, bg="#1e1f22")
         mode_frame.pack(fill=tk.X, pady=(0, 6))
 
@@ -169,13 +172,29 @@ class AutoAllowApp:
             font=("Segoe UI", 8)
         ).pack(side=tk.RIGHT)
 
-        # Secondary settings row: Sound & Count
-        settings_frame = tk.Frame(body, bg="#1e1f22")
-        settings_frame.pack(fill=tk.X, pady=(0, 6))
+        # Background Stealth & Target info row
+        stealth_frame = tk.Frame(body, bg="#1e1f22")
+        stealth_frame.pack(fill=tk.X, pady=(0, 6))
 
         tk.Checkbutton(
-            settings_frame,
-            text="Sound on Click",
+            stealth_frame,
+            text="Zero-Disruption (Restore Mouse & App)",
+            variable=self.stealth_enabled,
+            bg="#1e1f22",
+            fg="#949ba4",
+            selectcolor="#2b2d31",
+            activebackground="#1e1f22",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8)
+        ).pack(side=tk.LEFT)
+
+        # Sound & Test Row
+        snd_frame = tk.Frame(body, bg="#1e1f22")
+        snd_frame.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Checkbutton(
+            snd_frame,
+            text="Loud Chime on Click 🔊",
             variable=self.sound_enabled,
             bg="#1e1f22",
             fg="#949ba4",
@@ -185,8 +204,35 @@ class AutoAllowApp:
             font=("Segoe UI", 8)
         ).pack(side=tk.LEFT)
 
+        btn_test_snd = tk.Button(
+            snd_frame,
+            text="Test Sound",
+            bg="#2b2d31",
+            fg="#00a8fc",
+            activebackground="#3e4247",
+            activeforeground="#ffffff",
+            bd=0,
+            font=("Segoe UI", 8),
+            padx=6,
+            command=self.play_chime
+        )
+        btn_test_snd.pack(side=tk.RIGHT)
+
+        # Stats & Target Lock Footer
+        footer_frame = tk.Frame(body, bg="#1e1f22")
+        footer_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        lbl_target = tk.Label(
+            footer_frame,
+            text="🔒 Target Locked: Antigravity Only",
+            bg="#1e1f22",
+            fg="#57f287",
+            font=("Segoe UI", 7, "bold")
+        )
+        lbl_target.pack(side=tk.LEFT)
+
         self.count_lbl = tk.Label(
-            settings_frame,
+            footer_frame,
             text="Approved: 0",
             bg="#1e1f22",
             fg="#5865f2",
@@ -194,21 +240,10 @@ class AutoAllowApp:
         )
         self.count_lbl.pack(side=tk.RIGHT)
 
-        # Hint Footer
-        footer = tk.Label(
-            body,
-            text="💡 Tip: Turn ON after approving plan. Auto-clicks Submit.",
-            bg="#1e1f22",
-            fg="#72767d",
-            font=("Segoe UI", 7)
-        )
-        footer.pack(side=tk.BOTTOM, pady=(4, 0))
-
     def position_window(self):
-        # Position window near bottom right above taskbar
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        win_w, win_h = 340, 260
+        win_w, win_h = 360, 300
         x = screen_w - win_w - 30
         y = screen_h - win_h - 70
         self.root.geometry(f"{win_w}x{win_h}+{x}+{y}")
@@ -251,6 +286,53 @@ class AutoAllowApp:
         self.status_dot.configure(fg="#72767d")
         self.status_text.configure(text="Status: PAUSED (Press F9 to Toggle)", fg="#b9bbbe")
 
+    def play_chime(self):
+        """Plays a loud, crisp, pleasant two-tone alert chime."""
+        def sound_worker():
+            try:
+                winsound.Beep(1300, 110)
+                winsound.Beep(1850, 160)
+            except Exception:
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        threading.Thread(target=sound_worker, daemon=True).start()
+
+    def is_antigravity_window(self, x, y):
+        """
+        Verifies that the window under (x, y) belongs STRICTLY to Antigravity.
+        Prevents false clicks in Chrome, Firefox, VS Code, or any other application.
+        """
+        try:
+            pt = wintypes.POINT(x, y)
+            hwnd = user32.WindowFromPoint(pt)
+            if not hwnd:
+                return False, None
+
+            # Get root top-level window
+            root_hwnd = user32.GetAncestor(hwnd, 2)  # GA_ROOT
+            if not root_hwnd:
+                root_hwnd = hwnd
+
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(root_hwnd, ctypes.byref(pid))
+            
+            # Check process name
+            proc = psutil.Process(pid.value)
+            proc_name = proc.name().lower()
+            if "antigravity" in proc_name:
+                return True, root_hwnd
+
+            # Also check window title as fallback
+            length = user32.GetWindowTextLengthW(root_hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(root_hwnd, buff, length + 1)
+                if "antigravity" in buff.value.lower():
+                    return True, root_hwnd
+
+            return False, None
+        except Exception:
+            return False, None
+
     def detection_loop(self):
         """Monitors screen periodically for the Antigravity modal Submit button."""
         while self.is_running:
@@ -258,32 +340,51 @@ class AutoAllowApp:
                 btn_pos = self.find_submit_button_on_screen()
                 if btn_pos and self.is_running:
                     cx, cy = btn_pos
-                    
-                    # Optional brief delay to let modal render completely
+
+                    # 1. VERIFY TARGET: MUST BE ANTIGRAVITY ONLY!
+                    is_target, target_hwnd = self.is_antigravity_window(cx, cy)
+                    if not is_target:
+                        # Not inside Antigravity! Skip immediately to not disrupt other apps
+                        time.sleep(0.8)
+                        continue
+
+                    # Brief wait for modal stability
                     time.sleep(self.delay_var.get())
 
-                    # If Option 4 (Always Allow) is selected, click Option 4 first
+                    # Save current user state for Zero-Disruption
+                    prev_active_hwnd = user32.GetForegroundWindow()
+                    orig_mouse_x, orig_mouse_y = pyautogui.position()
+
+                    # 2. EXECUTE THE CLICK
                     if self.selected_mode.get() == "always_allow":
-                        # In the Antigravity modal, Option 4 is roughly ~55px above Submit and 250px left
-                        # But clicking item 4 radio / row:
+                        # Click Option 4 row
                         opt4_x = max(10, cx - 240)
                         opt4_y = max(10, cy - 55)
                         pyautogui.click(opt4_x, opt4_y)
-                        time.sleep(0.15)
+                        time.sleep(0.12)
 
-                    # Click the Submit button
+                    # Click Submit button
                     pyautogui.click(cx, cy)
                     self.click_count += 1
-                    
-                    # Sound notification
+
+                    # 3. ZERO-DISRUPTION RESTORE:
+                    # If user is in another app (Chrome, browser, etc.), restore mouse & active window instantly!
+                    if self.stealth_enabled.get():
+                        # Instantly return cursor to where user was working
+                        pyautogui.moveTo(orig_mouse_x, orig_mouse_y)
+                        # Restore foreground focus back to the user's browser/app
+                        if prev_active_hwnd and prev_active_hwnd != target_hwnd:
+                            user32.SetForegroundWindow(prev_active_hwnd)
+
+                    # 4. LOUD NOTIFICATION CHIME
                     if self.sound_enabled.get():
-                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                        self.play_chime()
 
                     # Update UI count
                     self.root.after(0, lambda c=self.click_count: self.count_lbl.configure(text=f"Approved: {c}"))
-                    
-                    # Cool-down to prevent double-clicking same dialog
-                    time.sleep(1.2)
+
+                    # Cooldown to avoid duplicate clicks
+                    time.sleep(1.3)
                 else:
                     time.sleep(0.6)
             except Exception:
@@ -295,8 +396,6 @@ class AutoAllowApp:
             screenshot = ImageGrab.grab()
             w, h = screenshot.size
 
-            # Scan the screen in vertical steps
-            # Dialog usually appears in the lower or middle half of the screen
             y_start = int(h * 0.2)
             y_end = int(h * 0.95)
 
@@ -305,7 +404,7 @@ class AutoAllowApp:
                 start_x = 0
                 for x in range(50, w - 50, 4):
                     r, g, b = screenshot.getpixel((x, y))[:3]
-                    # Blue Submit button colors: R < 70, G: 85-175, B: 170-255, (B - R > 100)
+                    # Blue Submit button colors: R < 75, G: 85-175, B: 170-255, (B - R > 100)
                     if r < 75 and 85 <= g <= 175 and 170 <= b <= 255 and (b - r > 100):
                         if streak == 0:
                             start_x = x
@@ -315,7 +414,7 @@ class AutoAllowApp:
                             cx = start_x + streak // 2
                             cy = y
 
-                            # Verify vertical button thickness
+                            # Verify vertical thickness
                             h_count = 0
                             for check_y in range(max(0, cy - 25), min(h, cy + 25), 2):
                                 pr, pg, pb = screenshot.getpixel((cx, check_y))[:3]
@@ -323,7 +422,7 @@ class AutoAllowApp:
                                     h_count += 2
 
                             if 15 <= h_count <= 55:
-                                # Verify dark modal dialog background to the left
+                                # Check dark modal dialog background to the left
                                 dark_matches = 0
                                 for check_x in range(max(0, cx - 200), cx - 50, 15):
                                     dr, dg, db = screenshot.getpixel((check_x, cy))[:3]
@@ -341,7 +440,6 @@ class AutoAllowApp:
         """Background thread listening for F9 global toggle hotkey."""
         def listener():
             VK_F9 = 0x78
-            user32 = ctypes.windll.user32
             last_pressed = False
 
             while True:
