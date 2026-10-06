@@ -12,7 +12,7 @@ Features:
 - Loud Audible Chime on every approval
 """
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __app_name__ = "Antigravity Auto-Allow"
 __author__ = "nandhakumar-murugan"
 
@@ -471,21 +471,22 @@ class AutoAllowApp:
             scale_x = vw / img_w if img_w else 1.0
             scale_y = vh / img_h if img_h else 1.0
 
-            # Scan rows across all screens
-            for y in range(30, img_h - 30, 4):
+            # Scan rows across screens: NEVER scan above y=350 to prevent clicking top titlebars, menus, or system files!
+            y_start = max(350, int(img_h * 0.35))
+            y_end = img_h - 40
+
+            for y in range(y_start, y_end, 4):
                 streak = 0
                 start_x = 0
-                for x in range(30, img_w - 30, 3):
+                for x in range(50, img_w - 50, 3):
                     r, g, b = screenshot.getpixel((x, y))[:3]
                     # Blue button detection:
-                    # Blue is distinctly higher than red and green
-                    # Covers standard Antigravity blue #007acc as well as cast compressed hues
                     if (b >= 140) and (b > r + 35) and (b > g + 10) and (r < 120):
                         if streak == 0:
                             start_x = x
                         streak += 3
                     else:
-                        if 24 <= streak <= 220:
+                        if 28 <= streak <= 220:
                             cx_img = start_x + streak // 2
                             cy_img = y
 
@@ -496,11 +497,19 @@ class AutoAllowApp:
                                 if (pb >= 140) and (pb > pr + 30) and (pr < 120):
                                     h_count += 2
 
-                            # Valid button thickness is usually 14 to 55px
                             if 12 <= h_count <= 60:
-                                screen_x = vx + int(cx_img * scale_x)
-                                screen_y = vy + int(cy_img * scale_y)
-                                return (screen_x, screen_y)
+                                # Verify button has white text inside ('Submit')
+                                white_pixels = 0
+                                for wx in range(max(0, cx_img - 30), min(img_w, cx_img + 30), 3):
+                                    for wy in range(max(0, cy_img - 10), min(img_h, cy_img + 10), 2):
+                                        t_r, t_g, t_b = screenshot.getpixel((wx, wy))[:3]
+                                        if t_r > 190 and t_g > 190 and t_b > 190:
+                                            white_pixels += 1
+
+                                if white_pixels >= 2:
+                                    screen_x = vx + int(cx_img * scale_x)
+                                    screen_y = vy + int(cy_img * scale_y)
+                                    return (screen_x, screen_y)
                         streak = 0
             return None
         except Exception:

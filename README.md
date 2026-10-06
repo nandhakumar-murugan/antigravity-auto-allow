@@ -1,4 +1,4 @@
-# Antigravity Auto-Allow Companion (Ultra-Tolerant Multi-Screen Edition)
+# Antigravity Auto-Allow Companion (System Protection & Safe Zones Edition)
 
 A floating on-screen desktop tool created specifically to solve confirmation fatigue when running agent tasks in Google Antigravity.
 
@@ -6,12 +6,16 @@ A floating on-screen desktop tool created specifically to solve confirmation fat
 
 ## 🏷️ Versions & Changelog
 
-### **v1.5.0 (Ultra-Tolerant Engine & Live Activity Log - Latest)**
-- **Ultra-Tolerant Color Matching**: Removed fragile dark background requirements. Easily catches blue Submit buttons across Wi-Fi cast compression, varied screen brightness, and custom themes.
-- **Direct Win32 Hardware Cursor Movement**: Uses `win32api.SetCursorPos` and `mouse_event` for direct native clicking across any multi-monitor virtual coordinates.
-- **Live Activity Log Box**: Shows real-time status right on the widget face (e.g. `[18:48:02] Scanning...`, `[18:48:03] Detected button at (2540, 515)...`).
-- **Instant Hotkey (`F8`)**: Press `F8` from anywhere to immediately submit/approve the open Antigravity dialog with zero delay.
-- **`🎯 Force Click Submit`**: Diagnostic button to test-click or trigger Enter on the dialog instantly.
+### **v1.6.0 (System File Protection & Safe Zone Edition - Latest)**
+- **System File Protection**: Strictly prohibits scanning above `Y = 350px`. Mathematically eliminates any chance of clicking window titlebars, File menus, or desktop system icons.
+- **White Text Verification**: Only recognizes blue rectangles that contain white text pixels (`Submit`), rejecting plain blue icons or menu selection highlights.
+- **Ultra-Tolerant Engine**: Detects the Submit button reliably across Wi-Fi display cast compression and varied screen resolutions.
+- **Direct Win32 Hardware Cursor Movement**: Native `SetCursorPos` and `mouse_event`.
+- **Live Activity Log Box**: Real-time status display.
+- **Instant Hotkey (`F8`)**: Immediate one-touch approval.
+
+### **v1.5.0**
+- Ultra-tolerant color matching, live log box, force click button.
 
 ### **v1.4.0**
 - Win32 virtual mouse precision clicker, DPI normalization, Enter fallback.
