@@ -1,4 +1,4 @@
-# Antigravity Auto-Allow Companion (Precision Calibration & Multi-Screen Edition)
+# Antigravity Auto-Allow Companion (Ultra-Tolerant Multi-Screen Edition)
 
 A floating on-screen desktop tool created specifically to solve confirmation fatigue when running agent tasks in Google Antigravity.
 
@@ -6,16 +6,18 @@ A floating on-screen desktop tool created specifically to solve confirmation fat
 
 ## 🏷️ Versions & Changelog
 
-### **v1.4.0 (Precision Calibration Edition - Latest)**
-- **DPI-Aware Coordinate Normalization**: Automatically converts physical captured pixels into normalized logical virtual desktop coordinates across mixed-DPI displays.
-- **Win32 `MOUSEEVENTF_VIRTUALDESK` Clicker**: Uses native 64-bit Windows normalized absolute virtual mouse events (`0..65535`) to land with single-pixel accuracy on extended/cast displays.
-- **Dual Action (Click + Enter Fallback)**: Delivers both the precision click and a native `VK_RETURN` (Enter) keypress. In Antigravity's dialog, Option 1 is pre-focused, so this guarantees 100% submission even if mouse calibration differs.
-- **Diagnostic `🎯 Click Detected Pos`**: Allows you to instantly test-click the detected button coordinates to verify cursor placement with your own eyes.
+### **v1.5.0 (Ultra-Tolerant Engine & Live Activity Log - Latest)**
+- **Ultra-Tolerant Color Matching**: Removed fragile dark background requirements. Easily catches blue Submit buttons across Wi-Fi cast compression, varied screen brightness, and custom themes.
+- **Direct Win32 Hardware Cursor Movement**: Uses `win32api.SetCursorPos` and `mouse_event` for direct native clicking across any multi-monitor virtual coordinates.
+- **Live Activity Log Box**: Shows real-time status right on the widget face (e.g. `[18:48:02] Scanning...`, `[18:48:03] Detected button at (2540, 515)...`).
+- **Instant Hotkey (`F8`)**: Press `F8` from anywhere to immediately submit/approve the open Antigravity dialog with zero delay.
+- **`🎯 Force Click Submit`**: Diagnostic button to test-click or trigger Enter on the dialog instantly.
+
+### **v1.4.0**
+- Win32 virtual mouse precision clicker, DPI normalization, Enter fallback.
 
 ### **v1.3.0**
 - Dual-Laptop / Extended Cast Support across all connected screens (`all_screens=True`).
-- Tolerant Color Engine for Wi-Fi video streaming compression.
-- Live Screen Scanner button.
 
 ### **v1.2.0**
 - Semantic version badges and release tags.

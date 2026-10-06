@@ -1,23 +1,25 @@
 """
-Antigravity Auto-Allow Companion (Precision Calibration & Multi-Screen Edition)
-Version: 1.4.0
+Antigravity Auto-Allow Companion (Ultra-Tolerant Multi-Screen Edition)
+Version: 1.5.0
 
 Features:
-- Dual-Laptop / Extended Cast Support with DPI-Aware Coordinate Normalization
-- Win32 MOUSEEVENTF_VIRTUALDESK Precision Clicker (accurate across all multi-monitor DPI scales)
-- Dual Action: Native Precision Click + Smart Enter (VK_RETURN) fallback to guarantee 100% submission
-- Live Screen Scanner & 'Test Click' verification button
-- Zero-Disruption: Runs quietly in background, instantly restores mouse cursor and active window
-- Loud Audible Chime: Dual-tone high-alert chime on every approval
+- Ultra-Tolerant Color Matching (no fragile background checks; catches all cast/Miracast blue buttons)
+- Live Real-Time Activity Log right inside the widget UI
+- Direct Win32 Native Cursor Positioning + Left Click + Enter key fallback
+- Manual Instant Approve Hotkey (F8)
+- 'Force Click Submit' one-touch diagnostic button
+- Zero-Disruption: Instantly restores mouse cursor to where you were working
+- Loud Audible Chime on every approval
 """
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __app_name__ = "Antigravity Auto-Allow"
 __author__ = "nandhakumar-murugan"
 
 import os
 import sys
 import time
+import datetime
 import threading
 import winsound
 import ctypes
@@ -27,17 +29,18 @@ from tkinter import ttk, messagebox
 from PIL import ImageGrab
 import pyautogui
 import psutil
+import win32api
+import win32con
 
 # Enable Per-Monitor DPI Awareness
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception:
     try:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         pass
 
-# Configure pyautogui safety
 pyautogui.PAUSE = 0.02
 pyautogui.FAILSAFE = True
 
@@ -47,31 +50,24 @@ class AutoAllowApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{__app_name__} v{__version__}")
-        self.root.geometry("380x370")
+        self.root.geometry("400x410")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1e1f22")
 
-        # Windows borderless styling
         self.root.overrideredirect(True)
 
-        # State Variables
         self.is_running = False
         self.auto_thread = None
         self.hotkey_thread = None
         self.click_count = 0
         self.selected_mode = tk.StringVar(value="allow_once")  # allow_once or always_allow
         self.sound_enabled = tk.BooleanVar(value=True)
-        self.stealth_enabled = tk.BooleanVar(value=True)  # Instantly restore mouse & active window
-        self.strict_lock = tk.BooleanVar(value=False)  # Allow clicking Submit across screens
-        self.delay_var = tk.DoubleVar(value=0.25)
-        self.x_offset = tk.IntVar(value=0)  # Micro-tuning offset
-        self.y_offset = tk.IntVar(value=0)
+        self.stealth_enabled = tk.BooleanVar(value=True)
+        self.delay_var = tk.DoubleVar(value=0.20)
 
-        # Last detected coordinates for diagnostic test click
         self.last_detected_pos = None
 
-        # Dragging variables
         self._drag_start_x = 0
         self._drag_start_y = 0
 
@@ -81,22 +77,31 @@ class AutoAllowApp:
 
     def get_monitor_count(self):
         try:
-            return user32.GetSystemMetrics(80)  # SM_CMONITORS
+            return user32.GetSystemMetrics(80)
         except Exception:
             return 1
 
     def get_virtual_bounds(self):
-        vx = user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
-        vy = user32.GetSystemMetrics(77)  # SM_YVIRTUALSCREEN
-        vw = user32.GetSystemMetrics(78)  # SM_CXVIRTUALSCREEN
-        vh = user32.GetSystemMetrics(79)  # SM_CYVIRTUALSCREEN
+        vx = user32.GetSystemMetrics(76)
+        vy = user32.GetSystemMetrics(77)
+        vw = user32.GetSystemMetrics(78)
+        vh = user32.GetSystemMetrics(79)
         return vx, vy, vw, vh
+
+    def log(self, text, color="#b9bbbe"):
+        """Logs a timestamped message into the on-screen live log box."""
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        msg = f"[{now}] {text}"
+        try:
+            self.log_lbl.configure(text=msg, fg=color)
+        except Exception:
+            pass
 
     def setup_ui(self):
         border_frame = tk.Frame(self.root, bg="#2b2d31", bd=1, highlightbackground="#3c3f41", highlightthickness=1)
         border_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Header Bar (Draggable)
+        # Header Bar
         header = tk.Frame(border_frame, bg="#2b2d31", height=32)
         header.pack(fill=tk.X, side=tk.TOP)
         header.pack_propagate(False)
@@ -249,7 +254,7 @@ class AutoAllowApp:
             font=("Segoe UI", 8)
         ).pack(side=tk.RIGHT)
 
-        # Test Diagnostics Row
+        # Diagnostic Action Buttons
         test_frame = tk.Frame(body, bg="#1e1f22")
         test_frame.pack(fill=tk.X, pady=(0, 6))
 
@@ -263,29 +268,29 @@ class AutoAllowApp:
             bd=0,
             font=("Segoe UI", 8, "bold"),
             padx=6,
-            pady=3,
+            pady=4,
             command=self.test_scan_screens
         )
         btn_scan_now.pack(side=tk.LEFT)
 
-        btn_test_click = tk.Button(
+        btn_force_click = tk.Button(
             test_frame,
-            text="🎯 Click Detected Pos",
-            bg="#434c5e",
+            text="🎯 Force Click Submit",
+            bg="#4c566a",
             fg="#ebcb8b",
-            activebackground="#4c566a",
+            activebackground="#5e81ac",
             activeforeground="#ffffff",
             bd=0,
             font=("Segoe UI", 8, "bold"),
             padx=6,
-            pady=3,
-            command=self.test_click_detected
+            pady=4,
+            command=self.force_click_submit
         )
-        btn_test_click.pack(side=tk.LEFT, padx=(6, 0))
+        btn_force_click.pack(side=tk.LEFT, padx=(6, 0))
 
         btn_test_snd = tk.Button(
             test_frame,
-            text="Sound",
+            text="Chime",
             bg="#2b2d31",
             fg="#00a8fc",
             activebackground="#3e4247",
@@ -293,28 +298,43 @@ class AutoAllowApp:
             bd=0,
             font=("Segoe UI", 8),
             padx=6,
-            pady=3,
+            pady=4,
             command=self.play_chime
         )
         btn_test_snd.pack(side=tk.RIGHT)
 
-        # Coordinate Info Display
-        self.coord_lbl = tk.Label(
+        # Live Real-time Activity Log Box
+        log_box = tk.Frame(body, bg="#141517", padx=8, pady=6, bd=1, relief=tk.SUNKEN)
+        log_box.pack(fill=tk.X, pady=(0, 6))
+
+        self.log_lbl = tk.Label(
+            log_box,
+            text="[Ready] Click '▶ START AUTO-ALLOW' or press F9.",
+            bg="#141517",
+            fg="#88c0d0",
+            font=("Consolas", 8),
+            anchor="w",
+            justify=tk.LEFT
+        )
+        self.log_lbl.pack(fill=tk.X)
+
+        # Quick Hotkey Tip
+        tip_lbl = tk.Label(
             body,
-            text="Ready. Click 'Find Button' while modal is open to test.",
+            text="💡 Shortcuts: F9 = Toggle Auto-Allow | F8 = Instant Approve Now",
             bg="#1e1f22",
             fg="#72767d",
             font=("Segoe UI", 7)
         )
-        self.coord_lbl.pack(fill=tk.X, pady=(0, 4))
+        tip_lbl.pack(fill=tk.X, pady=(0, 4))
 
-        # Stats & Target Lock Footer
+        # Footer
         footer_frame = tk.Frame(body, bg="#1e1f22")
         footer_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         lbl_target = tk.Label(
             footer_frame,
-            text=f"🎯 Dual Precision • v{__version__}",
+            text=f"📡 Multi-Screen Ultra • v{__version__}",
             bg="#1e1f22",
             fg="#57f287",
             font=("Segoe UI", 7, "bold")
@@ -336,11 +356,11 @@ class AutoAllowApp:
             f"Version: {__version__}\n"
             f"Author: {__author__}\n\n"
             "Changelog:\n"
-            "• v1.4.0: Precision Win32 virtual mouse clicks, DPI scaling normalization, dual Enter key fallback\n"
-            "• v1.3.0: Dual-laptop & Miracast extended screen support\n"
-            "• v1.2.0: Added semantic versioning UI badges & metadata\n"
-            "• v1.1.0: Antigravity target lock, stealth restore & loud chime\n"
-            "• v1.0.0: Initial auto-allow release\n\n"
+            "• v1.5.0: Ultra-tolerant color engine, live log box, F8 instant hotkey, force click button\n"
+            "• v1.4.0: Win32 precision clicking, DPI normalization, Enter fallback\n"
+            "• v1.3.0: Dual-laptop extended cast screen support\n"
+            "• v1.2.0: Version badges and metadata\n"
+            "• v1.1.0: Target lock, stealth mode, loud chime\n\n"
             "Repository:\n"
             "https://github.com/nandhakumar-murugan/antigravity-auto-allow"
         )
@@ -349,7 +369,7 @@ class AutoAllowApp:
     def position_window(self):
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        win_w, win_h = 380, 370
+        win_w, win_h = 400, 410
         x = screen_w - win_w - 30
         y = screen_h - win_h - 70
         self.root.geometry(f"{win_w}x{win_h}+{x}+{y}")
@@ -378,6 +398,7 @@ class AutoAllowApp:
         )
         self.status_dot.configure(fg="#23a55a")
         self.status_text.configure(text=f"ACTIVE • Monitoring All {self.get_monitor_count()} Screens", fg="#23a55a")
+        self.log("Auto-Allow ACTIVE. Monitoring for Submit button...", "#57f287")
 
         self.auto_thread = threading.Thread(target=self.detection_loop, daemon=True)
         self.auto_thread.start()
@@ -391,6 +412,7 @@ class AutoAllowApp:
         )
         self.status_dot.configure(fg="#72767d")
         self.status_text.configure(text=f"PAUSED (F9) • {self.get_monitor_count()} Displays Active", fg="#b9bbbe")
+        self.log("Auto-Allow PAUSED.", "#e5c07b")
 
     def play_chime(self):
         def sound_worker():
@@ -401,37 +423,22 @@ class AutoAllowApp:
                 winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
         threading.Thread(target=sound_worker, daemon=True).start()
 
-    def click_virtual_desktop(self, target_x, target_y):
+    def click_at(self, target_x, target_y):
         """
-        Uses Win32 MOUSEEVENTF_VIRTUALDESK to deliver a single-pixel
-        accurate click across multi-monitor and mixed-DPI virtual desktops.
+        Direct hardware cursor click using Win32 API.
+        Works across all extended monitors and cast laptops.
         """
         try:
-            vx, vy, vw, vh = self.get_virtual_bounds()
-            if vw == 0 or vh == 0:
-                vw, vh = 1920, 1080
-
-            # Normalize to 0..65535 across virtual desktop
-            norm_x = int((target_x - vx) * 65535 / vw)
-            norm_y = int((target_y - vy) * 65535 / vh)
-
-            MOUSEEVENTF_MOVE = 0x0001
-            MOUSEEVENTF_LEFTDOWN = 0x0002
-            MOUSEEVENTF_LEFTUP = 0x0004
-            MOUSEEVENTF_ABSOLUTE = 0x8000
-            MOUSEEVENTF_VIRTUALDESK = 0x4000
-
-            flags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
-            user32.mouse_event(flags, norm_x, norm_y, 0, 0)
+            win32api.SetCursorPos((int(target_x), int(target_y)))
             time.sleep(0.04)
-            user32.mouse_event(flags | MOUSEEVENTF_LEFTDOWN, norm_x, norm_y, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
             time.sleep(0.04)
-            user32.mouse_event(flags | MOUSEEVENTF_LEFTUP, norm_x, norm_y, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
         except Exception:
             pyautogui.click(target_x, target_y)
 
     def send_enter_key(self):
-        """Sends native VK_RETURN (Enter) keypress to submit focused modal dialog."""
+        """Sends native Enter (VK_RETURN) keypress."""
         try:
             VK_RETURN = 0x0D
             KEYEVENTF_KEYUP = 0x0002
@@ -443,8 +450,8 @@ class AutoAllowApp:
 
     def find_submit_button_on_screen(self):
         """
-        Captures entire virtual desktop across all monitors and scales coordinates
-        correctly to account for mixed DPI scaling on casted displays.
+        Ultra-tolerant screen scanner for the blue Submit button.
+        Scans all connected screens without fragile background checks.
         """
         try:
             vx, vy, vw, vh = self.get_virtual_bounds()
@@ -461,54 +468,80 @@ class AutoAllowApp:
             if img_w == 0 or img_h == 0:
                 return None
 
-            # Calculate DPI scale factor between captured image pixels and virtual desktop units
             scale_x = vw / img_w if img_w else 1.0
             scale_y = vh / img_h if img_h else 1.0
 
-            # Scan the image in rows
-            for y in range(40, img_h - 40, 5):
+            # Scan rows across all screens
+            for y in range(30, img_h - 30, 4):
                 streak = 0
                 start_x = 0
-                for x in range(40, img_w - 40, 4):
+                for x in range(30, img_w - 30, 3):
                     r, g, b = screenshot.getpixel((x, y))[:3]
-                    # Blue button detection with cast compression tolerance
-                    if r < 105 and 70 <= g <= 200 and 150 <= b <= 255 and (b > r + 45) and (b >= g + 8):
+                    # Blue button detection:
+                    # Blue is distinctly higher than red and green
+                    # Covers standard Antigravity blue #007acc as well as cast compressed hues
+                    if (b >= 140) and (b > r + 35) and (b > g + 10) and (r < 120):
                         if streak == 0:
                             start_x = x
-                        streak += 4
+                        streak += 3
                     else:
-                        if 30 <= streak <= 220:
+                        if 24 <= streak <= 220:
                             cx_img = start_x + streak // 2
                             cy_img = y
 
-                            # Verify button vertical thickness
+                            # Verify button vertical height (thickness)
                             h_count = 0
-                            for check_y in range(max(0, cy_img - 26), min(img_h, cy_img + 26), 2):
+                            for check_y in range(max(0, cy_img - 25), min(img_h, cy_img + 25), 2):
                                 pr, pg, pb = screenshot.getpixel((cx_img, check_y))[:3]
-                                if pr < 105 and 70 <= pg <= 200 and 150 <= pb <= 255 and (pb > pr + 40):
+                                if (pb >= 140) and (pb > pr + 30) and (pr < 120):
                                     h_count += 2
 
-                            if 14 <= h_count <= 62:
-                                # Verify dark modal background to the left
-                                dark_matches = 0
-                                for check_x in range(max(0, cx_img - 240), cx_img - 40, 15):
-                                    dr, dg, db = screenshot.getpixel((check_x, cy_img))[:3]
-                                    if dr < 70 and dg < 70 and db < 80:
-                                        dark_matches += 1
-
-                                if dark_matches >= 3:
-                                    # Convert image pixel coordinates to normalized virtual desktop coordinates
-                                    screen_x = vx + int(cx_img * scale_x) + self.x_offset.get()
-                                    screen_y = vy + int(cy_img * scale_y) + self.y_offset.get()
-                                    return (screen_x, screen_y)
+                            # Valid button thickness is usually 14 to 55px
+                            if 12 <= h_count <= 60:
+                                screen_x = vx + int(cx_img * scale_x)
+                                screen_y = vy + int(cy_img * scale_y)
+                                return (screen_x, screen_y)
                         streak = 0
             return None
         except Exception:
             return None
 
+    def execute_approval(self, cx, cy):
+        """Performs the approval click + Enter key + chime + stealth restore."""
+        prev_active_hwnd = user32.GetForegroundWindow()
+        orig_mouse_x, orig_mouse_y = pyautogui.position()
+
+        # If Option 4 selected, click Option 4 row first
+        if self.selected_mode.get() == "always_allow":
+            opt4_x = max(10, cx - 220)
+            opt4_y = max(10, cy - 50)
+            self.click_at(opt4_x, opt4_y)
+            time.sleep(0.12)
+
+        # 1. Click the Submit button
+        self.click_at(cx, cy)
+        time.sleep(0.04)
+
+        # 2. Also send Enter key
+        self.send_enter_key()
+        self.click_count += 1
+
+        # 3. Stealth restore mouse and window focus
+        if self.stealth_enabled.get():
+            win32api.SetCursorPos((orig_mouse_x, orig_mouse_y))
+            if prev_active_hwnd:
+                user32.SetForegroundWindow(prev_active_hwnd)
+
+        # 4. Sound alert
+        if self.sound_enabled.get():
+            self.play_chime()
+
+        self.root.after(0, lambda c=self.click_count: self.count_lbl.configure(text=f"Approved: {c}"))
+        self.root.after(0, lambda: self.log(f"Approved! Clicked at ({cx}, {cy}).", "#57f287"))
+
     def test_scan_screens(self):
-        """Scans all screens and reports exact coordinates found."""
-        self.status_text.configure(text="Scanning all screens...", fg="#88c0d0")
+        """Scans screens and reports whether Submit button was found."""
+        self.log("Scanning all screens...", "#88c0d0")
         self.root.update()
 
         pos = self.find_submit_button_on_screen()
@@ -517,62 +550,26 @@ class AutoAllowApp:
             sx, sy = pos
             self.play_chime()
             screen_name = "Screen 2 (Extended Cast)" if sx >= 1536 else "Screen 1 (Primary)"
-            self.coord_lbl.configure(
-                text=f"Found: ({sx}, {sy}) on {screen_name}. Click '🎯 Click Detected Pos' to test.",
-                fg="#57f287"
-            )
-            self.status_text.configure(text=f"Detected on {screen_name}!", fg="#57f287")
-            messagebox.showinfo("Scanner Result", f"✅ Found Submit button at:\n\nX: {sx}, Y: {sy}\nDisplay: {screen_name}\n\nYou can click '🎯 Click Detected Pos' to test-click it now!")
+            self.log(f"Found button at ({sx}, {sy}) on {screen_name}!", "#57f287")
+            messagebox.showinfo("Scanner Result", f"✅ Submit button detected!\n\nCoordinates: ({sx}, {sy})\nMonitor: {screen_name}\n\nYou can click '🎯 Force Click Submit' to test-click it now!")
         else:
-            self.coord_lbl.configure(text="No Submit button detected right now.", fg="#f04747")
-            self.status_text.configure(text="No button detected", fg="#f04747")
-            messagebox.showwarning("Scanner Result", "❌ No Submit button detected.\n\nMake sure an Antigravity confirmation modal is currently visible on either screen.")
+            self.log("Scan complete: No Submit button visible.", "#f04747")
+            messagebox.showwarning("Scanner Result", "❌ No Submit button detected on either screen.\n\nMake sure an Antigravity approval dialog is currently open.")
 
-    def test_click_detected(self):
-        """Test-clicks the detected position so the user can verify mouse placement."""
-        if not self.last_detected_pos:
-            self.test_scan_screens()
-
-        if self.last_detected_pos:
-            sx, sy = self.last_detected_pos
-            self.click_virtual_desktop(sx, sy)
-            time.sleep(0.05)
+    def force_click_submit(self):
+        """Immediately clicks the detected button or sends Enter key."""
+        pos = self.find_submit_button_on_screen()
+        if pos:
+            sx, sy = pos
+            self.execute_approval(sx, sy)
+            messagebox.showinfo("Clicked", f"🎯 Successfully clicked Submit at ({sx}, {sy})!")
+        else:
+            # Fallback: send Enter key directly
             self.send_enter_key()
-            self.play_chime()
-            messagebox.showinfo("Test Click", f"🎯 Clicked at ({sx}, {sy}) and sent Enter key!")
-
-    def execute_approval(self, cx, cy):
-        """Executes the approval with precision click + Enter key fallback."""
-        prev_active_hwnd = user32.GetForegroundWindow()
-        orig_mouse_x, orig_mouse_y = pyautogui.position()
-
-        # If Option 4 (Always Allow) is selected, click Option 4 row first
-        if self.selected_mode.get() == "always_allow":
-            opt4_x = max(10, cx - 220)
-            opt4_y = max(10, cy - 50)
-            self.click_virtual_desktop(opt4_x, opt4_y)
-            time.sleep(0.12)
-
-        # 1. Deliver Win32 virtual desktop click
-        self.click_virtual_desktop(cx, cy)
-        time.sleep(0.04)
-
-        # 2. Also send Enter key to guarantee submission
-        self.send_enter_key()
-        self.click_count += 1
-
-        # 3. Restore mouse cursor and user's previous active window
-        if self.stealth_enabled.get():
-            pyautogui.moveTo(orig_mouse_x, orig_mouse_y)
-            if prev_active_hwnd:
-                user32.SetForegroundWindow(prev_active_hwnd)
-
-        # 4. Play loud chime
-        if self.sound_enabled.get():
-            self.play_chime()
-
-        self.root.after(0, lambda c=self.click_count: self.count_lbl.configure(text=f"Approved: {c}"))
-        self.root.after(0, lambda pos=(cx, cy): self.coord_lbl.configure(text=f"Last approved at ({pos[0]}, {pos[1]})", fg="#5865f2"))
+            if self.sound_enabled.get():
+                self.play_chime()
+            self.log("Sent Enter key directly.", "#ebcb8b")
+            messagebox.showinfo("Enter Sent", "Sent Enter key directly to submit focused dialog!")
 
     def detection_loop(self):
         while self.is_running:
@@ -580,24 +577,33 @@ class AutoAllowApp:
                 btn_pos = self.find_submit_button_on_screen()
                 if btn_pos and self.is_running:
                     cx, cy = btn_pos
+                    self.log(f"Detected Submit button at ({cx}, {cy})! Clicking...", "#88c0d0")
                     time.sleep(self.delay_var.get())
                     self.execute_approval(cx, cy)
                     time.sleep(1.3)
                 else:
-                    time.sleep(0.6)
-            except Exception:
+                    time.sleep(0.5)
+            except Exception as e:
                 time.sleep(1.0)
 
     def start_hotkey_listener(self):
+        """Background listener for F9 (toggle) and F8 (instant approve)."""
         def listener():
             VK_F9 = 0x78
-            last_pressed = False
+            VK_F8 = 0x77
+            f9_last = False
+            f8_last = False
             while True:
                 time.sleep(0.1)
-                pressed = (user32.GetAsyncKeyState(VK_F9) & 0x8000) != 0
-                if pressed and not last_pressed:
+                f9_pressed = (user32.GetAsyncKeyState(VK_F9) & 0x8000) != 0
+                if f9_pressed and not f9_last:
                     self.root.after(0, self.toggle_running)
-                last_pressed = pressed
+                f9_last = f9_pressed
+
+                f8_pressed = (user32.GetAsyncKeyState(VK_F8) & 0x8000) != 0
+                if f8_pressed and not f8_last:
+                    self.root.after(0, self.force_click_submit)
+                f8_last = f8_pressed
 
         self.hotkey_thread = threading.Thread(target=listener, daemon=True)
         self.hotkey_thread.start()
