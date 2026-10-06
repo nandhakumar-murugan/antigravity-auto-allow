@@ -12,7 +12,7 @@ Features:
 - Loud Alert Chime on every approval
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __app_name__ = "Antigravity Auto-Allow"
 __author__ = "nandhakumar-murugan"
 
@@ -404,27 +404,42 @@ class AutoAllowApp:
         threading.Thread(target=sound_worker, daemon=True).start()
 
     def get_antigravity_window_control(self):
-        """Finds Antigravity's window control in UI Automation tree."""
+        """Finds the REAL Antigravity application window control (strictly excluding this tool)."""
         try:
             root = auto.GetRootControl()
+            # 1. Search by process Antigravity.exe (most accurate)
+            for child in root.GetChildren():
+                name = child.Name or ""
+                # Strictly exclude this companion tool
+                if "auto-allow" in name.lower() or "auto_allow" in name.lower() or child.NativeWindowHandle == self.root.winfo_id():
+                    continue
+
+                pid = child.ProcessId
+                try:
+                    proc = psutil.Process(pid)
+                    pname = proc.name().lower()
+                except Exception:
+                    pname = ""
+
+                # Real application process is Antigravity.exe
+                if "antigravity.exe" in pname:
+                    return child
+
+            # 2. Search by window name/class excluding this tool
             for child in root.GetChildren():
                 name = child.Name or ""
                 class_name = child.ClassName or ""
+                if "auto-allow" in name.lower() or "auto_allow" in name.lower() or child.NativeWindowHandle == self.root.winfo_id():
+                    continue
                 if "antigravity" in name.lower() or "antigravity" in class_name.lower():
                     return child
-            # Secondary check by process name
-            for p in psutil.process_iter(['pid', 'name']):
-                if "antigravity" in (p.info['name'] or '').lower():
-                    win = auto.WindowControl(searchDepth=1, ProcessId=p.info['pid'])
-                    if win.Exists(maxSearchSeconds=0.1):
-                        return win
         except Exception:
             pass
         return None
 
     def find_submit_button_uia(self):
         """
-        Locates the exact 'Submit' button inside Antigravity's accessibility tree.
+        Locates the exact 'Submit' button inside the real Antigravity window.
         Guarantees 100% that it is INSIDE Antigravity and NEVER touches system files.
         """
         try:
@@ -433,34 +448,38 @@ class AutoAllowApp:
                 return None, None
 
             # Look for button named 'Submit'
-            submit_btn = ag_win.ButtonControl(searchDepth=20, Name="Submit")
-            if submit_btn.Exists(maxSearchSeconds=0.2):
+            submit_btn = ag_win.ButtonControl(searchDepth=30, Name="Submit")
+            if submit_btn.Exists(maxSearchSeconds=0.3):
                 rect = submit_btn.BoundingRectangle
                 return submit_btn, rect
 
             # Search in descendant buttons
             for btn in ag_win.GetDescendants():
-                if btn.ControlTypeName == "ButtonControl" and (btn.Name == "Submit" or "submit" in (btn.Name or "").lower()):
-                    rect = btn.BoundingRectangle
-                    return btn, rect
+                if btn.ControlTypeName == "ButtonControl":
+                    b_name = (btn.Name or "").strip().lower()
+                    if b_name == "submit":
+                        rect = btn.BoundingRectangle
+                        return btn, rect
         except Exception:
             pass
         return None, None
 
     def submit_antigravity_dialog(self):
         """
-        Executes the approval strictly inside Antigravity.
+        Executes the approval strictly inside the real Antigravity window.
         Method 1: Direct UIA programmatic button Invoke() (no mouse cursor movement!).
         Method 2: Click center of Submit button BoundingRectangle.
         Method 3: Focus Antigravity window & send native VK_RETURN (Enter).
         """
         prev_active_hwnd = user32.GetForegroundWindow()
+        ag_win = self.get_antigravity_window_control()
+        if not ag_win:
+            return False
 
-        # Step 1: Try UIA programmatic Invoke
+        # Step 1: Try UIA programmatic Invoke or click bounding box
         btn, rect = self.find_submit_button_uia()
         if btn:
             try:
-                # Try programmatic Invoke (no cursor movement at all!)
                 invoke_pattern = btn.GetInvokePattern()
                 if invoke_pattern:
                     invoke_pattern.Invoke()
@@ -469,7 +488,7 @@ class AutoAllowApp:
             except Exception:
                 pass
 
-            # Try clicking center of button's exact bounding box
+            # Try clicking center of button's exact bounding box inside Antigravity
             if rect and rect.width() > 0:
                 cx = rect.left + rect.width() // 2
                 cy = rect.top + rect.height() // 2
@@ -484,26 +503,23 @@ class AutoAllowApp:
                     user32.SetForegroundWindow(prev_active_hwnd)
                 return True
 
-        # Step 2: Fallback - Focus Antigravity and send Enter key
-        ag_win = self.get_antigravity_window_control()
-        if ag_win:
-            try:
-                hwnd = ag_win.NativeWindowHandle
-                if hwnd:
-                    user32.SetForegroundWindow(hwnd)
-                    time.sleep(0.06)
-                    # Send Enter
-                    VK_RETURN = 0x0D
-                    user32.keybd_event(VK_RETURN, 0, 0, 0)
-                    time.sleep(0.03)
-                    user32.keybd_event(VK_RETURN, 0, 2, 0)
-                    self.on_successful_approval("Submitted via Enter Key on Antigravity Window")
-                    if self.stealth_enabled.get() and prev_active_hwnd:
-                        time.sleep(0.05)
-                        user32.SetForegroundWindow(prev_active_hwnd)
-                    return True
-            except Exception:
-                pass
+        # Step 2: Fallback - Focus real Antigravity window and send Enter key
+        try:
+            hwnd = ag_win.NativeWindowHandle
+            if hwnd:
+                user32.SetForegroundWindow(hwnd)
+                time.sleep(0.06)
+                VK_RETURN = 0x0D
+                user32.keybd_event(VK_RETURN, 0, 0, 0)
+                time.sleep(0.03)
+                user32.keybd_event(VK_RETURN, 0, 2, 0)
+                self.on_successful_approval("Submitted via Enter Key on Antigravity Window")
+                if self.stealth_enabled.get() and prev_active_hwnd:
+                    time.sleep(0.05)
+                    user32.SetForegroundWindow(prev_active_hwnd)
+                return True
+        except Exception:
+            pass
 
         return False
 

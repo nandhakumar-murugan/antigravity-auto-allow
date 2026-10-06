@@ -1,4 +1,4 @@
-# Antigravity Auto-Allow Companion (Direct UI Automation Edition)
+# Antigravity Auto-Allow Companion (Antigravity.exe Process Locking Edition)
 
 A floating on-screen desktop tool created specifically to solve confirmation fatigue when running agent tasks in Google Antigravity.
 
@@ -6,24 +6,20 @@ A floating on-screen desktop tool created specifically to solve confirmation fat
 
 ## 🏷️ Versions & Changelog
 
-### **v2.0.0 (Direct UI Automation & Safe Invocation Edition - Major Release)**
-- **Direct Windows UI Automation (UIA)**: Completely replaces unreliable pixel scanners with native Microsoft UI Automation (`uiautomation`).
-- **Programmatic DOM `Invoke()`**: Submits the dialog directly through the Accessibility / DOM tree **without moving the physical mouse cursor at all**!
-- **100% System File Immune**: Strictly interrogates the Antigravity Electron accessibility tree. It is physically impossible to touch system files, desktop icons, or other application menus.
-- **Resolution & Cast Proof**: Works flawlessly across multiple screens, wireless Miracast laptops, and mixed DPI scalings because it operates on object trees rather than screen coordinates.
-- **Smart Focus & Enter Fallback**: Seamlessly handles tall or scrolled dialogs.
+### **v2.1.0 (Antigravity.exe Process Target Locking - Latest)**
+- **Self-Target Exclusion**: Explicitly excludes the companion widget window (`auto-allow`) from window lookups so it never targets itself.
+- **Strict `Antigravity.exe` Process Match**: Targets the real Electron application window by its unique process name (`Antigravity.exe`), immediately locating the actual active conversation window.
+- **Deep DOM Button Search**: Traverses up to 30 levels of the accessibility tree to find the bright blue `[ Submit ]` button inside Antigravity's dialog card.
+- **Zero-Disruption Fallback**: Focuses the real Antigravity window and delivers native `Enter` keypress if the button is scrolled, instantly submitting Option 1 (*"Yes, allow this time"*).
+
+### **v2.0.0**
+- Direct Windows UI Automation (UIA) DOM invocation.
 
 ### **v1.6.0**
 - Safe zone coordinate restrictions.
 
 ### **v1.5.0**
 - Real-time live activity log and instant hotkey `F8`.
-
-### **v1.4.0**
-- Win32 precision clicking.
-
-### **v1.0.0**
-- Initial release.
 
 ---
 
